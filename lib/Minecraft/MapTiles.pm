@@ -12,9 +12,8 @@ sub new
 
 	my $self = bless { %opts },$class;
 	$self->{tiles} = {};	
-	$self->{tiles} = {};	
-
-	
+	Minecraft::Config::load_config( $self->{colours_file} );
+	$self->{map} = $Minecraft::Config::COLOURS=$Minecraft::Config::COLOURS;
 
 	return $self;
 }
@@ -40,12 +39,15 @@ sub tile
 	my $fn = $zoom."_${xtile}_${ytile}.png";
 
 	my $attempts = 0;
+	my $PAUSE = 2;
 	while( !defined $self->{tiles}->{$fn} )
 	{
 		my $url = $self->{url}.$self->{zoom}."/$xtile/$ytile.png";
 		my $file = $self->{dir}."/$fn";
 		if( !-e $file )
 		{
+			print "[tile]";
+			sleep($PAUSE);
 			my $cmd = "curl -s '$url' > '$file'";
 			#print "$cmd\n";
 			`$cmd`;
@@ -59,8 +61,9 @@ sub tile
 			{
 				die "Failed lots of times trying to load $url. Giving up.";
 			}
-			print "Failed to read $url (attempt $attempts)\n";
-			sleep(2);
+			$PAUSE*=2;
+			print "Failed to read $url (attempt $attempts). Waiting $PAUSE seconds\n";
+			sleep($PAUSE);
 			print "OK, let's try that again...\n";
 		}
 	}

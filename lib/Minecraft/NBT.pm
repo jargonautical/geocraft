@@ -2,6 +2,7 @@ package Minecraft::NBT;
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 use strict;
 use warnings;
+use Data::Dumper;
 
 sub from_file
 {
@@ -116,6 +117,7 @@ sub typed_tag
 	if( $type == 9 ) { return $self->tag_list( $needs_name ); }
 	if( $type == 10 ) { return $self->tag_compound( $needs_name ); }
 	if( $type == 11 ) { return $self->tag_int_array( $needs_name ); }
+	if( $type == 12 ) { return $self->tag_long_array( $needs_name ); }
 	die "Unknown tag type: $type at offset ".($self->{offset}-1)."\n";
 }
 #1
@@ -249,7 +251,21 @@ sub tag_int_array
 	}
 	return $v;
 }
+#12
+sub tag_long_array
+{
+	my( $self, $needs_name ) = @_;
 
+	my $v = bless {}, "Minecraft::NBT::LongArray";
+	$v->{_name} = $self->string if( $needs_name );
+	my $length = unpack('l', $self->gete(4) );
+	$v->{_value} = [];
+	for( my $i=0; $i<$length; ++$i )
+	{
+		push @{$v->{_value}}, unpack('q', $self->gete(8) );
+	}
+	return $v;
+}
 1;
 
 #######################################################################
@@ -350,7 +366,8 @@ sub put_tag
 	elsif( ref($tag) eq "Minecraft::NBT::TagList" ) { $self->put_tag_list( $tag, $needs_name ); }
 	elsif( ref($tag) eq "Minecraft::NBT::Compound" ) { $self->put_tag_compound( $tag, $needs_name ); }
 	elsif( ref($tag) eq "Minecraft::NBT::IntArray" ) { $self->put_tag_int_array( $tag, $needs_name ); }
-	else { Carp::confess "Unknown tag type: ".ref($tag); }
+	elsif( ref($tag) eq "Minecraft::NBT::LongArray" ) { $self->put_tag_long_array( $tag, $needs_name ); }
+	else { Carp::confess "Unknown tag type: ".ref($tag)." '$tag'"; }
 }
 #1
 sub put_tag_byte
@@ -441,6 +458,9 @@ sub put_tag_list
 	$self->put_string( $tag->{_name} ) if( $needs_name );
 
 	$self->put_byte( $tag->{_type} );
+if( $tag->{_type}==0 && scalar(@{$tag->{_value}})>0 ) {
+die Dumper($tag);
+}
 	$self->pute( pack( 'l', scalar(@{$tag->{_value}}) ) );
 	foreach my $tag_i ( @{$tag->{_value}} )
 	{
@@ -478,6 +498,19 @@ sub put_tag_int_array
 		$self->pute( pack( 'l', $value ));
 	}
 }
+#12
+sub put_tag_long_array
+{
+	my( $self, $tag, $needs_name ) = @_;
 
+	$self->put_byte(11) if( $needs_name );
+	$self->put_string( $tag->{_name} ) if( $needs_name );
+
+	$self->pute( pack( 'l', scalar(@{$tag->{_value}}) ) );
+	foreach my $value ( @{$tag->{_value}} )
+	{
+		$self->pute( pack( 'q', $value ));
+	}
+}
 1;
 

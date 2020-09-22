@@ -29,6 +29,7 @@ sub new
 	return $self;
 }
 
+# return the relative position inside a region for an absolute coord 
 sub c
 {
 	my( $x,$y,$z ) = @_;
@@ -58,6 +59,18 @@ sub set_block
 	my( $self,   $x,$y,$z, $id ) = @_;
 
 	return $self->block_region( $x,$y,$z )->set_block( c($x,$y,$z), $id );
+}
+sub add_sign
+{
+	my( $self,   $x,$y,$z, $label ) = @_;
+
+	return $self->block_region( $x,$y,$z )->add_sign( c($x,$y,$z), $x,$z, $label );
+}
+sub set_light
+{
+	my( $self,   $x,$y,$z, $level ) = @_;
+
+	return $self->block_region( $x,$y,$z )->set_level( c($x,$y,$z), $level );
 }
 sub block_region
 {
@@ -119,6 +132,14 @@ sub save
 	{
 		print "Did not save anything!\n";
 	}
+}
+
+# with a following win and no looped references this should free memory 
+sub uncache 
+{
+	my( $self ) = @_;
+
+	$self->{regions} = {};
 }
 
 sub save_level

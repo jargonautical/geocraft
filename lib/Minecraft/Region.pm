@@ -6,6 +6,8 @@ use strict;
 use warnings;
 use Data::Dumper;
 use POSIX;
+use JSON::PP;
+use utf8;
 
 #coordinates are relative to the region
 
@@ -86,7 +88,6 @@ sub add_chunk
 {
 	my($self,   $c_x, $c_z ) = @_;
 
-
 	my $level = bless { _name=>"Level" }, "Minecraft::NBT::Compound";	
 	$self->{$c_z}->{$c_x} = {
 		timestamp => time(),
@@ -108,7 +109,6 @@ sub add_chunk
 	{
 		&{$self->{opts}->{init_chunk}}( $self, $c_x, $c_z );
 	}
-
 	$self->{_changed} = 1;
 }
 
@@ -185,6 +185,78 @@ sub get_subtype
 		return ($byte&240)/16;
 	}
 }
+
+sub set_light
+{
+	my( $self,   $rel_x,$y,$rel_z, $level ) = @_;
+
+	my $section = $self->block_section($rel_x,$y,$rel_z);
+	if( !$section ) 
+	{ 
+		$section = $self->add_section($rel_x,$y,$rel_z);
+	}
+	my $offset = $self->block_offset($rel_x,$y,$rel_z);
+
+	# set subtype	
+	my $byte = ord substr( $section->{BlockLight}->{_value}, ($offset/2), 1 );
+	if( $offset % 2 == 0 )
+	{
+		$byte = ($byte&240) + $level;
+	}
+	else
+	{
+		$byte = $level*16 + ($byte&15);
+	}
+	substr( $section->{BlockLight}->{_value}, ($offset/2), 1 ) = chr($byte);
+
+	$self->{_changed} = 1;
+}
+
+sub add_sign
+{
+	my( $self,   $rel_x,$y,$rel_z, $x,$z, $text ) = @_;
+
+	my $SIGNWIDTH = 13;#bold
+	my @lines = ();
+	while( length( $text ) )
+	{
+		$text =~ s/\s*$//;
+		$text =~ s/^\s*//;
+		my $line;
+		if( $text =~ m/^(.{1,$SIGNWIDTH})(\s|$)/ ) {
+			$line = $1;
+		} else {
+			$line = substr( $text, 0, $SIGNWIDTH );	
+		}
+		push @lines, $line;
+		$text = substr( $text, length( $line ) );
+	}
+	$lines[0] = "" unless defined $lines[0];
+	$lines[1] = "" unless defined $lines[1];
+	$lines[2] = "" unless defined $lines[2];
+	$lines[3] = "" unless defined $lines[3];
+
+	$self->set_block( $rel_x,$y,$rel_z,  63 );
+	my $data = bless {
+		x => (bless { _name=>"x", _value=>$x }, 'Minecraft::NBT::Int'),
+		y => (bless { _name=>"y", _value=>$y }, 'Minecraft::NBT::Int'),
+		z => (bless { _name=>"z", _value=>$z }, 'Minecraft::NBT::Int'),
+		id => (bless { _name=>"id", _value=> "minecraft:sign" }, 'Minecraft::NBT::String'),
+		Text1 => (bless { _name=>"Text1", _value=> encode_json( { "bold"=>1, "text"=>"§l".$lines[0] } ) }, 'Minecraft::NBT::String'),
+		Text2 => (bless { _name=>"Text2", _value=> encode_json( { "bold"=>1, "text"=>"§l".$lines[1] } ) }, 'Minecraft::NBT::String'),
+		Text3 => (bless { _name=>"Text3", _value=> encode_json( { "bold"=>1, "text"=>"§l".$lines[2] } ) }, 'Minecraft::NBT::String'),
+		Text4 => (bless { _name=>"Text4", _value=> encode_json( { "bold"=>1, "text"=>"§l".$lines[3] } ) }, 'Minecraft::NBT::String'),
+	}, "Minecraft::NBT::Compound";
+
+	# doing set_block above should force the chunk to exist
+	my( $chunk_x, $chunk_z ) = $self->chunk_xz($rel_x,$rel_z);
+	my $chunk = $self->{$chunk_z}->{$chunk_x}->{chunk};
+	
+	$chunk->{Level}->{TileEntities}->{_type} = 10; # for the ones that got messed up
+	push @{ $chunk->{Level}->{TileEntities}->{_value} }, $data;
+	print "[ADDED SIGN ".join( "/", @lines )."]";
+}
+
 sub set_block
 {
 	my( $self,   $rel_x,$y,$rel_z, $type ) = @_;
